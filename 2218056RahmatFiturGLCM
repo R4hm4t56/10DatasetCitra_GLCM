@@ -1,0 +1,71 @@
+import os
+import glob
+import numpy as np
+import pandas as pd
+from skimage.io import imread
+def greycomatrix_manual(image, distances=[1], angles=[0], levels=256, symmetric=True, normed=True):
+    rows, cols = image.shape
+    glcms = []
+    for d in distances:
+        for angle in angles:
+            dx = int(np.round(np.cos(angle)))
+            dy = int(np.round(np.sin(angle)))
+            glcm = np.zeros((levels, levels), dtype=np.float64)
+            for i in range(rows):
+                for j in range(cols):
+                    x = i + dy * d
+                    y = j + dx * d
+                    if 0 <= x < rows and 0 <= y < cols:
+                        p1 = image[i, j]
+                        p2 = image[x, y]
+                        glcm[p1, p2] += 1
+                        if symmetric:
+                            glcm[p2, p1] += 1
+            if normed:
+                glcm = glcm / glcm.sum()
+            glcms.append(glcm)
+    return np.array(glcms)
+
+def greycoprops_manual(glcm, prop):
+    i, j = np.indices(glcm.shape)
+    if prop == 'contrast':
+        return np.sum(glcm * (i - j)**2)
+    elif prop == 'homogeneity':
+        return np.sum(glcm / (1.0 + np.abs(i - j)))
+    elif prop == 'energy':
+        return np.sum(glcm**2)
+    elif prop == 'ASM':
+        return np.sum(glcm**2)
+    elif prop == 'entropy':
+        return -np.sum(glcm * np.log2(glcm + 1e-10))
+    elif prop == 'correlation':
+        mean_i = np.sum(i * glcm)
+        mean_j = np.sum(j * glcm)
+        std_i = np.sqrt(np.sum(glcm * (i - mean_i)**2))
+        std_j = np.sqrt(np.sum(glcm * (j - mean_j)**2))
+        return np.sum(glcm * (i - mean_i) * (j - mean_j)) / (std_i * std_j + 1e-10)
+    else:
+        raise ValueError("Property tidak dikenal")
+        folder_path = "/content/drive/MyDrive/Colab Notebooks/Dataset"   
+files = glob.glob(os.path.join(folder_path, "*.jpg"))[:10]
+
+data = []
+
+for f in files:
+    image = imread(f, as_gray=True)   
+    image = (image * 255).astype(np.uint8)  
+    
+    glcm = greycomatrix_manual(image, distances=[1], angles=[0], levels=256)
+    g = glcm[0]  
+    
+    features = {
+        "filename": os.path.basename(f),
+        "contrast": greycoprops_manual(g, 'contrast'),
+        "homogeneity": greycoprops_manual(g, 'homogeneity'),
+        "energy": greycoprops_manual(g, 'energy'),
+        "ASM": greycoprops_manual(g, 'ASM'),
+        "entropy": greycoprops_manual(g, 'entropy'),
+        "correlation": greycoprops_manual(g, 'correlation')
+    }
+    data.append(features)
+    
